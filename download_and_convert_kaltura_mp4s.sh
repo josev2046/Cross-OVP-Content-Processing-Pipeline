@@ -3,7 +3,7 @@
 # Cross-OVP Content Processing Pipeline
 # This script automates the acquisition and preparation of video content from Kaltura for platforms like Vimeo.
 # It streamlines the workflow of downloading specific Kaltura entries and re-encoding them to ensure optimal
-# compatibility and performance on target video hosting services, with a focus on British English conventions.
+# compatibility and performance on target video hosting services.
 
 # --- Configuration ---
 # IMPORTANT: Update these variables with your specific Kaltura details and desired content.
