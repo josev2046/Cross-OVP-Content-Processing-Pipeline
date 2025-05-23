@@ -1,0 +1,75 @@
+@startuml
+skinparam style strict
+
+actor User
+participant Terminal
+box "Bash Script" #LightBlue
+  participant Script
+  participant "local:jq" as JQ
+  participant "local:ffmpeg" as FFMPEG
+end box
+participant "Kaltura API" as KalturaAPI
+participant "Kaltura CDN" as KalturaCDN
+
+User -> Terminal : Executes script
+Terminal -> Script : ./download_and_convert_kaltura_mp4s.sh
+
+Script -> Script : Reads configuration (Generic IDs, Secrets, URLs)
+Script -> JQ : Checks if 'jq' is installed
+alt jq not found
+  JQ --> Script : Error
+  Script -> Terminal : "jq not found"
+  Script -> User : Exits
+else jq found
+  JQ --> Script : Success
+end
+
+Script -> FFMPEG : Checks if 'ffmpeg' is installed
+alt ffmpeg not found
+  FFMPEG --> Script : Error
+  Script -> Terminal : "ffmpeg not found"
+  Script -> User : Exits
+else ffmpeg found
+  FFMPEG --> Script : Success
+end
+
+Script -> Script : Creates/Navigates to Output Directory ($HOME/Desktop/Kaltura_Content_For_Vimeo)
+
+Script -> KalturaAPI : **API Call: Session.start** (PartnerID, UserSecret, Type=0)
+KalturaAPI --> Script : Returns **KS_TOKEN** (Kaltura Session Token)
+
+loop For each Entry (LocalName, KalturaEntryID) in KALTURA_ENTRIES
+  Script -> KalturaAPI : **API Call: flavorAsset.getByEntryId** (KalturaEntryID, KS_TOKEN)
+  alt API returns error (e.g., ENTRY_ID_NOT_FOUND)
+    KalturaAPI --> Script : KalturaAPIException (Error Code, Message)
+    Script -> Terminal : Log error, skip entry
+  else API returns Flavor Assets
+    KalturaAPI --> Script : JSON Array of Flavor Assets
+    Script -> JQ : Parses JSON, finds **MP4_FLAVOR_ID**
+    JQ --> Script : Returns MP4_FLAVOR_ID
+    Script -> KalturaCDN : **Download**: Get Original MP4 (KalturaEntryID, MP4_FLAVOR_ID, KS_TOKEN)
+    KalturaCDN --> Script : Streams MP4 Data
+    Script -> Script : Saves downloaded file (e.g., "My_Video_Project_A_001_original.mp4")
+    Script -> Terminal : Logs download status
+  end
+end
+
+Script -> Terminal : "All downloads attempted."
+
+loop For each downloaded _original.mp4 file
+  Script -> FFMPEG : **Re-encode**: Apply Vimeo settings (Input: _original.mp4, Output: _Vimeo.mp4)
+  alt FFmpeg conversion fails
+    FFMPEG --> Script : Error
+    Script -> Terminal : Log error
+  else FFmpeg conversion succeeds
+    FFMPEG --> Script : Success
+    Script -> Script : Saves re-encoded file (e.g., "My_Video_Project_A_001_Vimeo.mp4")
+    Script -> Terminal : Logs conversion status
+  end
+end
+
+Script -> Terminal : "All re-encodings attempted."
+Script -> Script : Navigates back to original directory
+Script -> Terminal : Displays final message
+User <-- Terminal : Process complete
+@enduml
